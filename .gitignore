@@ -1,0 +1,5 @@
+node_modules/
+dist/
+
+# Working plan, kept local on purpose.
+docs/PLAN.md
