@@ -1,0 +1,25 @@
+{
+  "name": "claude-launcher",
+  "version": "0.0.0",
+  "description": "Run Claude Code against any model.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "claude-launcher": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^5.9.3"
+  }
+}

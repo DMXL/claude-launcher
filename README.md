@@ -4,7 +4,7 @@ Run Claude Code against any model.
 
 It launches the Claude Code you already have, pointed at a provider that speaks the Anthropic Messages API. DeepSeek today, MiMo today, something else tomorrow.
 
-The examples below invoke `claude-launcher` by its full name. The command it eventually ships as, and whether it is one binary or a set of subcommands, is still open.
+The examples below invoke `claude-launcher` by its full name. It ships as one binary, and the first positional names the provider. Because provider names occupy that slot, `add`, `list`, `doctor` and `config` are reserved and cannot be used as provider names.
 
 ```sh
 claude-launcher deepseek
@@ -78,9 +78,17 @@ claude-launcher add deepseek
 
 ## Install
 
-Not yet. This is the design; see the plan doc for where the build actually stands.
+Not yet. The package is scaffolded but no provider is wired up, so there is nothing to install. To run what exists:
 
-The shape will be a Node.js package, installable globally with `pnpm add -g claude-launcher`, with the CLI decoupled from any shell. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
+```sh
+pnpm install
+pnpm build
+./dist/index.js --help
+```
+
+`pnpm dev` runs the TypeScript directly on Node 23.6 or later.
+
+The shape will be a Node.js package, installable globally with `pnpm add -g claude-launcher`, with the CLI decoupled from any shell. It is marked `private` until the licence is settled, so a stray `pnpm publish` cannot ship it. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
 
 ## Why not just export the variables
 
