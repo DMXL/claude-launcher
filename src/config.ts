@@ -262,6 +262,26 @@ function parseProvider(name: string, value: unknown): ProviderConfig {
   return provider;
 }
 
+// Shared by the user's config and the shipped provider definitions, so a built in
+// cannot drift from the schema a hand written entry has to satisfy.
+export function providerTable(parsed: Record<string, unknown>): Map<string, ProviderConfig> {
+  const providers = new Map<string, ProviderConfig>();
+
+  for (const [name, value] of Object.entries(parsed)) {
+    if (RESERVED_PROVIDER_NAMES.includes(name)) {
+      throw new ConfigError(`${SOURCE}: "${name}" is a reserved command name, so it cannot name a provider`);
+    }
+    if (!PROVIDER_NAME.test(name)) {
+      throw new ConfigError(
+        `${SOURCE}: "${name}" is not a usable provider name. Use lowercase letters, digits and hyphens, and do not start with a hyphen.`,
+      );
+    }
+    providers.set(name, parseProvider(name, value));
+  }
+
+  return providers;
+}
+
 export function loadConfig(options: LoadOptions = {}): Config {
   const env = options.env ?? process.env;
   const path = options.path ?? configPath(env);
@@ -289,20 +309,7 @@ export function loadConfig(options: LoadOptions = {}): Config {
     throw error;
   }
 
-  const providers = new Map<string, ProviderConfig>();
-  for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (RESERVED_PROVIDER_NAMES.includes(name)) {
-      throw new ConfigError(`${SOURCE}: "${name}" is a reserved command name, so it cannot name a provider`);
-    }
-    if (!PROVIDER_NAME.test(name)) {
-      throw new ConfigError(
-        `${SOURCE}: "${name}" is not a usable provider name. Use lowercase letters, digits and hyphens, and do not start with a hyphen.`,
-      );
-    }
-    providers.set(name, parseProvider(name, value));
-  }
-
-  return { path, providers };
+  return { path, providers: providerTable(parsed as Record<string, unknown>) };
 }
 
 export function displayPath(config: Config, env: NodeJS.ProcessEnv = process.env): string {

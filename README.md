@@ -23,7 +23,8 @@ A growing set of providers now ship an Anthropic-compatible gateway alongside th
 | Provider | Gateway | Models |
 |---|---|---|
 | DeepSeek | `https://api.deepseek.com/anthropic` | `deepseek-flash` and the rest of the V4 line |
-| Xiaomi MiMo | `https://token-plan-cn.xiaomimimo.com/anthropic` | `mimo-v2.6-pro`, `mimo-v2.6-flash` |
+| Xiaomi MiMo, token plan | `https://token-plan-cn.xiaomimimo.com/anthropic` | `mimo-v2.6-pro`, `mimo-v2.6-flash` |
+| Xiaomi MiMo, pay as you go | `https://api.xiaomimimo.com/anthropic` | `mimo-v2.6-pro`, `mimo-v2.6-flash` |
 
 So the launcher is not a translation layer. It is three environment variables pointing Claude Code at a different host, plus the dozen small corrections that stand between "it responds" and "it behaves like a first class model in the picker". Those corrections are the whole project. Each one is a thing Claude Code does differently when it does not recognise the model you named.
 
@@ -96,6 +97,22 @@ config.toml: deepseek.models[0]: unknown key "behave_as"
 ```
 
 `base_url` must be https, unless it points at localhost, where a plain http gateway is allowed and no key leaves the machine.
+
+## Known providers
+
+Three definitions ship, and `add` writes a stanza from one of them:
+
+| Name | Endpoint |
+|---|---|
+| `deepseek` | `api.deepseek.com/anthropic` |
+| `mimo` | `token-plan-cn.xiaomimimo.com/anthropic` |
+| `mimo-payg` | `api.xiaomimimo.com/anthropic` |
+
+These are definitions rather than defaults. Nothing takes effect unless `config.toml` names it, so what a launch does is always what you can read in your own config file. They carry no key, because `add` exists to collect one from whichever source you prefer.
+
+The two MiMo entries are the same product on two endpoints, and the keys are not interchangeable between them. Choosing between the two is choosing which key you hold, not which is better.
+
+Every value in these was measured against the live gateway, in both cases with a real tool call rather than a text reply. That is why DeepSeek lists `deepseek-flash` alone rather than the whole V4 line: a model nobody exercised is a claim nobody checked.
 
 ## Keys
 
