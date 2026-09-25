@@ -61,6 +61,17 @@ description = "1M context, native multimodal. Reasoning and main loop."
 
 `behaves_as` is deliberately pinned to a specific known model rather than a tier, because the profiles differ. On a 1M model with no fast mode, no lean prompt and no refusal fallback, borrowing a profile that claims those features produces requests the gateway rejects.
 
+The file is read from `$XDG_CONFIG_HOME/claude-launcher/config.toml`, falling back to `~/.config/claude-launcher/config.toml`. `context` takes a token count or a shorthand, so `"1m"`, `"128k"` and `200000` all work. `default_model` names the entry `claude-launcher deepseek` picks; leave it out and the first model listed wins.
+
+A key the loader does not recognise is an error rather than a shrug, since a misspelled `base_url` would otherwise be a silently ignored setting:
+
+```
+config.toml: deepseek.models[0]: unknown key "behave_as"
+  did you mean "behaves_as"?
+```
+
+`base_url` must be https, unless it points at localhost, where a plain http gateway is allowed and no key leaves the machine.
+
 ## Keys
 
 The launcher reads a key from the first source that answers:
@@ -78,15 +89,17 @@ claude-launcher add deepseek
 
 ## Install
 
-Not yet. The package is scaffolded but no provider is wired up, so there is nothing to install. To run what exists:
+Not yet. The config loads and is validated, but nothing is wired to Claude Code, so there is nothing to install. To run what exists:
 
 ```sh
 pnpm install
 pnpm build
-./dist/index.js --help
+./dist/index.js deepseek
+pnpm test
+pnpm typecheck
 ```
 
-`pnpm dev` runs the TypeScript directly on Node 23.6 or later.
+`pnpm dev` runs the TypeScript directly on Node 23.6 or later. Source files import each other with `.ts` extensions, which `tsc` rewrites to `.js` on the way out, the one arrangement that lets the same files run unevaluated under Node and compile for publishing.
 
 The shape will be a Node.js package, installable globally with `pnpm add -g claude-launcher`, with the CLI decoupled from any shell. It is marked `private` until the licence is settled, so a stray `pnpm publish` cannot ship it. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-
-export const RESERVED_COMMANDS = ["add", "list", "doctor", "config"] as const;
+import { ConfigError, RESERVED_PROVIDER_NAMES, displayPath, loadConfig } from "./config.ts";
+import { didYouMean } from "./suggest.ts";
 
 const USAGE = `claude-launcher: run Claude Code against any model.
 
@@ -10,17 +10,22 @@ Usage:
 
 Providers are declared in ~/.config/claude-launcher/config.toml. The
 first positional names the provider to launch, so it may not be one of
-the reserved commands: ${RESERVED_COMMANDS.join(", ")}.
+the reserved commands: ${RESERVED_PROVIDER_NAMES.join(", ")}.
 
 Options:
   -h, --help     Show this message.
   -v, --version  Show the version.
 
-No provider is wired up yet.`;
+Providers load, but nothing is wired to Claude Code yet.`;
 
 function readVersion(): string {
   const pkg = readFileSync(new URL("../package.json", import.meta.url), "utf8");
   return (JSON.parse(pkg) as { version: string }).version;
+}
+
+function fail(message: string): number {
+  process.stderr.write(`claude-launcher: ${message}\n`);
+  return 1;
 }
 
 export function main(argv: string[]): number {
@@ -45,10 +50,31 @@ export function main(argv: string[]): number {
   }
 
   const [provider] = positionals;
-  process.stderr.write(
-    provider === undefined
-      ? "claude-launcher: no provider given\n"
-      : `claude-launcher: provider "${provider}" is not implemented yet\n`,
+  if (provider === undefined) {
+    return fail("no provider given");
+  }
+
+  let config;
+  try {
+    config = loadConfig();
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      return fail(error.message);
+    }
+    throw error;
+  }
+
+  const selected = config.providers.get(provider);
+  if (selected === undefined) {
+    const known = [...config.providers.keys()];
+    const detail =
+      known.length === 0
+        ? `no providers are configured in ${displayPath(config)}`
+        : `configured providers: ${known.join(", ")}`;
+    return fail(`unknown provider "${provider}"${didYouMean(provider, known)}\n  ${detail}`);
+  }
+
+  return fail(
+    `"${provider}" is configured (default model ${selected.defaultModel}), but launching is not implemented yet`,
   );
-  return 1;
 }
