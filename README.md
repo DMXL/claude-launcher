@@ -1,15 +1,15 @@
-# claude-x-bridge
+# claude-launcher
 
 Run Claude Code against any model.
 
-The X is whatever you are bridging to. DeepSeek today, MiMo today, something else tomorrow.
+It launches the Claude Code you already have, pointed at a provider that speaks the Anthropic Messages API. DeepSeek today, MiMo today, something else tomorrow.
 
-The examples below invoke `claude-x-bridge` by its full name. The command it eventually ships as, and whether it is one binary or a set of subcommands, is still open.
+The examples below invoke `claude-launcher` by its full name. The command it eventually ships as, and whether it is one binary or a set of subcommands, is still open.
 
 ```sh
-claude-x-bridge deepseek
-claude-x-bridge mimo --model mimo-v2.6-pro
-claude-x-bridge deepseek --safe
+claude-launcher deepseek
+claude-launcher mimo --model mimo-v2.6-pro
+claude-launcher deepseek --safe
 ```
 
 No proxy, no shim, no patched binary, no fork. Everything Anthropic ships in the client (tools, skills, MCP servers, subagents, permissions, session history, `CLAUDE.md`) keeps working. Only the model behind it changes.
@@ -25,13 +25,13 @@ A growing set of providers now ship an Anthropic-compatible gateway alongside th
 | DeepSeek | `https://api.deepseek.com/anthropic` | `deepseek-flash` and the rest of the V4 line |
 | Xiaomi MiMo | `https://token-plan-cn.xiaomimimo.com/anthropic` | `mimo-v2.6-pro`, `mimo-v2.6-flash` |
 
-So the bridge is not a translation layer. It is three environment variables pointing Claude Code at a different host, plus the dozen small corrections that stand between "it responds" and "it behaves like a first class model in the picker". Those corrections are the whole project. Each one is a thing Claude Code does differently when it does not recognise the model you named.
+So the launcher is not a translation layer. It is three environment variables pointing Claude Code at a different host, plus the dozen small corrections that stand between "it responds" and "it behaves like a first class model in the picker". Those corrections are the whole project. Each one is a thing Claude Code does differently when it does not recognise the model you named.
 
 ## What it corrects
 
 **The invocation is scoped, and nothing is left behind.** Every variable is set for one process. A plain `claude` in the same shell still reaches Anthropic, and there is nothing to unset afterwards. State under `~/.claude` is shared by default, so your skills, MCP servers and history come along; set `CLAUDE_CONFIG_DIR` to run against isolated state instead.
 
-**The model picker is curated.** Claude Code's `/model` offers Opus, Sonnet and Haiku, none of which your gateway serves, so selecting one is a guaranteed failure with a confusing error. The bridge replaces the built-in options with the ones the provider actually serves, and disables the claude.ai connectors prompt, which is meaningless here. This rides in as inline `--settings` JSON, so `~/.claude/settings.json` is never written to.
+**The model picker is curated.** Claude Code's `/model` offers Opus, Sonnet and Haiku, none of which your gateway serves, so selecting one is a guaranteed failure with a confusing error. The launcher replaces the built-in options with the ones the provider actually serves, and disables the claude.ai connectors prompt, which is meaningless here. This rides in as inline `--settings` JSON, so `~/.claude/settings.json` is never written to.
 
 **Unknown models inherit known capability defaults.** Claude Code carries a per-model profile: whether it can use adaptive thinking, what effort level to launch with, whether it supports a lean prompt. A model absent from its catalog gets no profile. `behavesAs` maps the provider's model onto the closest model Claude Code does know, borrowing that profile without touching the model ID sent on the wire. This matters more than it sounds: it is the difference between a model that thinks and one that answers instantly.
 
@@ -46,7 +46,7 @@ So the bridge is not a translation layer. It is three environment variables poin
 Adding a provider is a config entry, not a code change.
 
 ```toml
-# ~/.config/claude-x-bridge/config.toml
+# ~/.config/claude-launcher/config.toml
 [deepseek]
 base_url = "https://api.deepseek.com/anthropic"
 key = { command = "pass show deepseek/api-key" }
@@ -63,7 +63,7 @@ description = "1M context, native multimodal. Reasoning and main loop."
 
 ## Keys
 
-The bridge reads a key from the first source that answers:
+The launcher reads a key from the first source that answers:
 
 1. a per provider environment variable, for CI and one off runs
 2. the `key.command` in the config, run and read from stdout
@@ -73,14 +73,14 @@ The bridge reads a key from the first source that answers:
 Nothing assumes a password manager. `pass`, `op`, `security`, `gpg` and a file of your own are all just a command that prints a key on stdout. Guided setup is the intended path:
 
 ```sh
-claude-x-bridge add deepseek
+claude-launcher add deepseek
 ```
 
 ## Install
 
 Not yet. This is the design; see the plan doc for where the build actually stands.
 
-The shape will be a Node.js package, installable globally with `pnpm add -g claude-x-bridge`, with the CLI decoupled from any shell. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
+The shape will be a Node.js package, installable globally with `pnpm add -g claude-launcher`, with the CLI decoupled from any shell. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
 
 ## Why not just export the variables
 
