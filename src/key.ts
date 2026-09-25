@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readSync } from "node:fs";
 import type { ProviderConfig } from "./config.ts";
+import { Interrupted, promptHidden } from "./prompt.ts";
 
 export type KeySource = "environment" | "command" | "value" | "prompt";
 
@@ -55,43 +55,7 @@ export const runKeyCommand: CommandRunner = (command) => {
   };
 };
 
-export const promptForKey: Prompt = (providerName) => {
-  const stdin = process.stdin;
-  const buffer = Buffer.alloc(1);
-  const terminal = stdin.isTTY === true;
-  let value = "";
-
-  process.stderr.write(`Key for ${providerName}: `);
-  if (terminal) stdin.setRawMode(true);
-
-  try {
-    for (;;) {
-      let read: number;
-      try {
-        read = readSync(0, buffer, 0, 1, null);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EAGAIN") continue;
-        throw error;
-      }
-      if (read === 0) break;
-
-      // Keys are ASCII, so a byte at a time keeps this free of decoder state.
-      const character = buffer.toString("latin1");
-      if (character === "\r" || character === "\n") break;
-      if (character === "") throw new KeyError("cancelled");
-      if (character === "" || character === "\b") {
-        value = value.slice(0, -1);
-        continue;
-      }
-      value += character;
-    }
-  } finally {
-    if (terminal) stdin.setRawMode(false);
-    process.stderr.write("\n");
-  }
-
-  return value;
-};
+export const promptForKey: Prompt = (providerName) => promptHidden(`Key for ${providerName}: `);
 
 function firstLine(text: string): string {
   return text.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
@@ -158,7 +122,14 @@ export function resolveKey(
     throw new KeyError(missingKeyMessage(providerName, variable));
   }
 
-  const typed = prompt(providerName).trim();
+  let typed: string;
+  try {
+    typed = prompt(providerName).trim();
+  } catch (error) {
+    if (error instanceof Interrupted) throw new KeyError("cancelled");
+    throw error;
+  }
+
   if (typed === "") {
     throw new KeyError(`no key entered for ${providerName}`);
   }

@@ -1,13 +1,25 @@
-import { readFileSync } from "node:fs";
-import { ConfigError, RESERVED_PROVIDER_NAMES, displayPath, loadConfig } from "./config.ts";
-import { KeyError, resolveKey } from "./key.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { runAdd } from "./add.ts";
+import { BUILT_IN_PROVIDERS } from "./builtins.ts";
+import {
+  ConfigError,
+  RESERVED_PROVIDER_NAMES,
+  configPath,
+  displayPath,
+  loadConfig,
+  shortenPath,
+} from "./config.ts";
+import { KeyError, envVarName, resolveKey } from "./key.ts";
 import { exitCode, planLaunch, runClaude } from "./launch.ts";
+import { fail, say } from "./output.ts";
 import { didYouMean } from "./suggest.ts";
 
 const USAGE = `claude-launcher: run Claude Code against any model.
 
 Usage:
   claude-launcher <provider> [options] [claude options...]
+  claude-launcher add <provider> [--force]
+  claude-launcher list
 
 Providers are declared in ~/.config/claude-launcher/config.toml. The
 first positional names the provider to launch, so it may not be one of
@@ -33,11 +45,6 @@ class UsageError extends Error {}
 function readVersion(): string {
   const pkg = readFileSync(new URL("../package.json", import.meta.url), "utf8");
   return (JSON.parse(pkg) as { version: string }).version;
-}
-
-function fail(message: string): number {
-  process.stderr.write(`claude-launcher: ${message}\n`);
-  return 1;
 }
 
 function splitArgs(argv: string[]): LaunchArgs {
@@ -74,22 +81,7 @@ function splitArgs(argv: string[]): LaunchArgs {
   return { ...(model !== undefined && { model }), safe, forwarded };
 }
 
-export function main(argv: string[]): number {
-  if (argv.length === 0) {
-    process.stdout.write(`${USAGE}\n`);
-    return 0;
-  }
-
-  const [first] = argv;
-  if (first === "-h" || first === "--help") {
-    process.stdout.write(`${USAGE}\n`);
-    return 0;
-  }
-  if (first === "-v" || first === "--version") {
-    process.stdout.write(`${readVersion()}\n`);
-    return 0;
-  }
-
+function runProvider(argv: string[]): number {
   const providerName = argv[0]!;
 
   let request: LaunchArgs;
@@ -149,4 +141,107 @@ export function main(argv: string[]): number {
   }
 
   return exitCode(result);
+}
+
+function addUsage(): string {
+  const shipped = [...BUILT_IN_PROVIDERS].map(([name, provider]) => `  ${name.padEnd(12)}${provider.baseUrl}`);
+  return [
+    "add a provider. shipped:",
+    ...shipped,
+    "",
+    "usage: claude-launcher add <provider> [--force]",
+    "",
+    "--force replaces an existing stanza for that provider in place.",
+  ].join("\n");
+}
+
+async function runAddCommand(argv: string[]): Promise<number> {
+  let force = false;
+  const names: string[] = [];
+
+  for (const argument of argv) {
+    if (argument === "--force") {
+      force = true;
+      continue;
+    }
+    if (argument === "-h" || argument === "--help") {
+      say(addUsage());
+      return 0;
+    }
+    if (argument.startsWith("-")) {
+      return fail(`add does not take "${argument}"`);
+    }
+    names.push(argument);
+  }
+
+  if (names.length === 0) {
+    say(addUsage());
+    return 1;
+  }
+  if (names.length > 1) {
+    return fail("add takes one provider name");
+  }
+
+  return runAdd(names[0]!, { force });
+}
+
+function describeKey(name: string, provider: { key?: { command?: string; value?: string } }): string {
+  if (provider.key?.command !== undefined) return `key from ${provider.key.command}`;
+  if (provider.key?.value !== undefined) return "key from config.toml";
+  return `key from ${envVarName(name)} or a prompt`;
+}
+
+function runList(): number {
+  const env = process.env;
+  const path = configPath(env);
+  const lines = ["shipped", ...[...BUILT_IN_PROVIDERS.keys()].map((name) => `  ${name}`), ""];
+
+  if (!existsSync(path)) {
+    lines.push(`configured  none, no file at ${shortenPath(path, env)}`);
+    say(lines.join("\n"));
+    return 0;
+  }
+
+  let config;
+  try {
+    config = loadConfig({ env });
+  } catch (error) {
+    if (error instanceof ConfigError) return fail(error.message);
+    throw error;
+  }
+
+  lines.push(`configured  ${displayPath(config, env)}`);
+  if (config.providers.size === 0) {
+    lines.push("  none");
+  } else {
+    for (const [name, provider] of config.providers) {
+      const yours = BUILT_IN_PROVIDERS.has(name) ? "" : "   yours";
+      lines.push(`  ${name.padEnd(12)}${describeKey(name, provider)}${yours}`);
+    }
+  }
+
+  say(lines.join("\n"));
+  return 0;
+}
+
+export async function main(argv: string[]): Promise<number> {
+  if (argv.length === 0) {
+    process.stdout.write(`${USAGE}\n`);
+    return 0;
+  }
+
+  const [first] = argv;
+  if (first === "-h" || first === "--help") {
+    process.stdout.write(`${USAGE}\n`);
+    return 0;
+  }
+  if (first === "-v" || first === "--version") {
+    process.stdout.write(`${readVersion()}\n`);
+    return 0;
+  }
+
+  if (first === "add") return runAddCommand(argv.slice(1));
+  if (first === "list") return runList();
+
+  return runProvider(argv);
 }

@@ -127,11 +127,38 @@ A source that answers badly is an error rather than a reason to try the next one
 
 The prompt is the last resort, and only appears when stdin is a terminal. Without one the launcher names the variable and both config forms instead of hanging, so CI fails fast rather than waiting on input that will never arrive.
 
-Nothing assumes a password manager. `pass`, `op`, `security`, `gpg` and a file of your own are all just a command that prints a key on stdout. Guided setup is the intended path:
+Nothing assumes a password manager. `pass`, `op`, `security`, `gpg` and a file of your own are all just a command that prints a key on stdout.
+
+## Setting one up
 
 ```sh
 claude-launcher add deepseek
 ```
+
+`add` takes the key at a hidden prompt and asks where it should live. Only vaults already installed are offered, so nothing on the menu can fail for a reason you cannot see before choosing it:
+
+| Vault | Ends up in the config as |
+|---|---|
+| `pass` | `key = { command = "pass show <item>" }` |
+| 1Password | `key = { command = "op read op://<vault>/<item>/credential" }` |
+| macOS keychain | `key = { command = "security find-generic-password -a <acct> -s <svc> -w" }` |
+| `secret-tool` | `key = { command = "secret-tool lookup service <provider> key api-key" }` |
+
+The secret reaches the storing command on stdin and never as an argument, because an argument is world readable in `/proc` for as long as the process lives. Two of those CLIs accept a secret only as an argument, so the launcher pipes it in and has the shell read it into a variable first. That CLI's own argument list is still visible for an instant, which nothing here can change.
+
+The menu also offers writing the key into `config.toml` in the clear, naming a command of your own, and storing nothing at all, which prints an `export` line on stdout and writes no key anywhere. The last is the shape a CI job wants.
+
+Of those four vaults, `pass` is the only one exercised on the machine this was built on. The other three are transcribed from their own documentation and have not been run, so treat their command shapes as unverified until someone does. Nothing is hidden by that: the read command is written into your config in plain sight, and a wrong one is a one line edit.
+
+What it writes is a stanza for that provider, and it refuses to touch one that already exists, naming the line your version is on. `--force` replaces that stanza in place and leaves the rest of the file, comments and all, exactly as it was.
+
+Then it reads the file back through the same loader a launch uses, resolves the key the way a launch would, and sends one small request to the gateway. A rejected key or a wrong endpoint is reported here rather than during your first session.
+
+```sh
+claude-launcher list
+```
+
+`list` shows what is shipped, what your config defines, and where each configured provider gets its key from. It never prints a key.
 
 ## Usage
 
@@ -148,15 +175,16 @@ claude-launcher deepseek -- -p "explain this repo"
 
 Anything else is forwarded to Claude Code, so `--resume`, `-p`, `--add-dir` and the rest behave as they normally do. A `--` sends every remaining argument through untouched, including anything that looks like a launcher option.
 
-The first positional names the provider, which is why `add`, `list`, `doctor` and `config` cannot be used as provider names.
+The first positional names the provider, which is why the reserved command names cannot be used as providers. `add` and `list` are built; `doctor` and `config` are still just reserved.
 
 ## Install
 
-Not yet on a registry. The launcher works, but you have to write `config.toml` by hand until `claude-launcher add` exists, so there is nothing to install yet. To run it:
+Not yet on a registry. To run it from a checkout:
 
 ```sh
 pnpm install
 pnpm build
+./dist/index.js add deepseek
 ./dist/index.js deepseek
 pnpm test
 pnpm typecheck

@@ -82,7 +82,7 @@ function jsonCopy(table: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(table)) as Record<string, unknown>;
 }
 
-function shortenPath(path: string, env: NodeJS.ProcessEnv): string {
+export function shortenPath(path: string, env: NodeJS.ProcessEnv): string {
   const home = env.HOME ?? homedir();
   return home !== "" && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
