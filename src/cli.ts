@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ConfigError, RESERVED_PROVIDER_NAMES, displayPath, loadConfig } from "./config.ts";
+import { KeyError, resolveKey } from "./key.ts";
 import { didYouMean } from "./suggest.ts";
 
 const USAGE = `claude-launcher: run Claude Code against any model.
@@ -16,7 +17,7 @@ Options:
   -h, --help     Show this message.
   -v, --version  Show the version.
 
-Providers load, but nothing is wired to Claude Code yet.`;
+Providers and keys load, but nothing is wired to Claude Code yet.`;
 
 function readVersion(): string {
   const pkg = readFileSync(new URL("../package.json", import.meta.url), "utf8");
@@ -74,7 +75,17 @@ export function main(argv: string[]): number {
     return fail(`unknown provider "${provider}"${didYouMean(provider, known)}\n  ${detail}`);
   }
 
+  let resolved;
+  try {
+    resolved = resolveKey(provider, selected);
+  } catch (error) {
+    if (error instanceof KeyError) {
+      return fail(error.message);
+    }
+    throw error;
+  }
+
   return fail(
-    `"${provider}" is configured (default model ${selected.defaultModel}), but launching is not implemented yet`,
+    `"${provider}" is configured (default model ${selected.defaultModel}, key from ${resolved.detail}), but launching is not implemented yet`,
   );
 }

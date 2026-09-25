@@ -76,10 +76,14 @@ config.toml: deepseek.models[0]: unknown key "behave_as"
 
 The launcher reads a key from the first source that answers:
 
-1. a per provider environment variable, for CI and one off runs
-2. the `key.command` in the config, run and read from stdout
+1. `CLAUDE_LAUNCHER_<PROVIDER>_KEY`, so `CLAUDE_LAUNCHER_DEEPSEEK_KEY`, for CI and one off runs
+2. the `key.command` in the config, run through a shell and read from stdout
 3. the `key.value` in the config, for people who keep their config file private
 4. an interactive prompt, which can be saved to whichever of the above you choose
+
+A source that answers badly is an error rather than a reason to try the next one. A variable exported but empty, or a `key.command` that exits non zero, or one that prints nothing, stops the launch and says which of those happened. Falling through would mean using a key you did not intend, which is harder to notice than a failure.
+
+The prompt is the last resort, and only appears when stdin is a terminal. Without one the launcher names the variable and both config forms instead of hanging, so CI fails fast rather than waiting on input that will never arrive.
 
 Nothing assumes a password manager. `pass`, `op`, `security`, `gpg` and a file of your own are all just a command that prints a key on stdout. Guided setup is the intended path:
 
