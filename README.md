@@ -179,7 +179,17 @@ The first positional names the provider, which is why the reserved command names
 
 ## Install
 
-Not yet on a registry. To run it from a checkout:
+Built, packaged, and not yet published. Once it is, this is the install:
+
+```sh
+pnpm add -g @dmxl/claude-launcher
+claude-launcher add deepseek
+claude-launcher deepseek
+```
+
+The package is scoped because `claude-launcher` on npm belongs to someone else, who publishes a Claude Code launcher of their own. The command it installs is still `claude-launcher`, so installing both puts two binaries of that name on your PATH and whichever landed last wins.
+
+Until it is on the registry, run it from a checkout:
 
 ```sh
 pnpm install
@@ -192,7 +202,7 @@ pnpm typecheck
 
 `pnpm dev` runs the TypeScript directly on Node 23.6 or later. Source files import each other with `.ts` extensions, which `tsc` rewrites to `.js` on the way out, the one arrangement that lets the same files run unevaluated under Node and compile for publishing.
 
-The shape will be a Node.js package, installable globally with `pnpm add -g claude-launcher`, with the CLI decoupled from any shell. It is marked `private` until the licence is settled, so a stray `pnpm publish` cannot ship it. The zsh functions this grew out of remain usable on their own for anyone who wants a shell function rather than an installed CLI.
+The zsh functions this grew out of are not published here. They name a personal `pass` item, an internal MCP server and a private note, none of which belongs in a public repo, and `add` covers what they did.
 
 ## Why not just export the variables
 
@@ -200,4 +210,4 @@ You can, and for one provider you should. It stops working for you at the second
 
 ## Licence
 
-To be decided before the first release.
+MIT. See [LICENSE](LICENSE).
