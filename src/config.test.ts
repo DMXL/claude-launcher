@@ -75,6 +75,71 @@ describe("loadConfig", () => {
     assert.equal(config.providers.get("deepseek")?.defaultModel, "deepseek-pro");
   });
 
+  it("resolves the fast model to the one marked fast", () => {
+    const config = load(`
+      [mimo]
+      base_url = "https://example.test/anthropic"
+      default_model = "mimo-v2.6-pro"
+
+      [[mimo.models]]
+      id = "mimo-v2.6-pro"
+
+      [[mimo.models]]
+      id = "mimo-v2.6-flash"
+      fast = true
+    `);
+    assert.equal(config.providers.get("mimo")?.fastModel, "mimo-v2.6-flash");
+    assert.equal(config.providers.get("mimo")?.defaultModel, "mimo-v2.6-pro");
+  });
+
+  it("falls back to the default model when none is marked fast", () => {
+    assert.equal(load(VALID).providers.get("deepseek")?.fastModel, "deepseek-flash");
+  });
+
+  it("refuses two models marked fast", () => {
+    const message = failure(`
+      [p]
+      base_url = "https://example.test/anthropic"
+
+      [[p.models]]
+      id = "a"
+      fast = true
+
+      [[p.models]]
+      id = "b"
+      fast = true
+    `);
+    assert.match(message, /only one model may be marked fast, found a, b/);
+  });
+
+  it("refuses a model id carrying a bracket suffix", () => {
+    const message = failure(`
+      [p]
+      base_url = "https://example.test/anthropic"
+
+      [[p.models]]
+      id = "deepseek-flash[1m]"
+    `);
+    assert.match(message, /without the bracket suffix, and set context instead/);
+  });
+
+  it("passes the settings table through untouched", () => {
+    const settings = load(`
+      [p]
+      base_url = "https://example.test/anthropic"
+      settings = { disableClaudeAiConnectors = true, alwaysThinkingEnabled = false }
+
+      [[p.models]]
+      id = "a"
+    `).providers.get("p")?.settings;
+
+    assert.deepEqual(settings, { disableClaudeAiConnectors: true, alwaysThinkingEnabled: false });
+  });
+
+  it("leaves settings undefined when the table is absent", () => {
+    assert.equal(load(VALID).providers.get("deepseek")?.settings, undefined);
+  });
+
   it("normalises context shorthands to a token count", () => {
     const config = load(`
       [p]
@@ -98,7 +163,7 @@ describe("loadConfig", () => {
     const models = config.providers.get("p")?.models ?? [];
     assert.deepEqual(
       models.map((model) => model.context),
-      [1_000_000, 128_000, 200_000, undefined],
+      [1024 * 1024, 128 * 1024, 200_000, undefined],
     );
   });
 

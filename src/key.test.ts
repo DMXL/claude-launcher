@@ -15,6 +15,7 @@ function provider(key?: ProviderConfig["key"]): ProviderConfig {
     baseUrl: "https://example.test/anthropic",
     models: [{ id: "a" }],
     defaultModel: "a",
+    fastModel: "a",
     ...(key !== undefined && { key }),
   };
 }

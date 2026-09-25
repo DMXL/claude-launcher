@@ -7,8 +7,8 @@ import { didYouMean } from "./suggest.ts";
 export const RESERVED_PROVIDER_NAMES: readonly string[] = ["add", "list", "doctor", "config"];
 
 const PROVIDER_NAME = /^[a-z0-9][a-z0-9-]*$/;
-const PROVIDER_KEYS = ["base_url", "key", "models", "default_model"];
-const MODEL_KEYS = ["id", "label", "context", "behaves_as", "description"];
+const PROVIDER_KEYS = ["base_url", "key", "models", "default_model", "settings"];
+const MODEL_KEYS = ["id", "label", "context", "behaves_as", "description", "fast"];
 const KEY_KEYS = ["command", "value"];
 const SOURCE = "config.toml";
 
@@ -30,6 +30,7 @@ export interface ModelConfig {
   context?: number;
   behavesAs?: string;
   description?: string;
+  fast?: boolean;
 }
 
 export interface ProviderConfig {
@@ -37,6 +38,8 @@ export interface ProviderConfig {
   key?: KeyConfig;
   models: ModelConfig[];
   defaultModel: string;
+  fastModel: string;
+  settings?: Record<string, unknown>;
 }
 
 export interface Config {
@@ -70,6 +73,13 @@ function rejectUnknownKeys(table: Record<string, unknown>, allowed: readonly str
       throw new ConfigError(`${where}: unknown key "${key}"${didYouMean(key, allowed)}`);
     }
   }
+}
+
+// The settings table goes onto the wire as JSON verbatim, so storing the round
+// tripped form keeps what the config holds identical to what the child process
+// receives. It also turns smol-toml's null prototype tables into ordinary ones.
+function jsonCopy(table: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(table)) as Record<string, unknown>;
 }
 
 function shortenPath(path: string, env: NodeJS.ProcessEnv): string {
@@ -121,9 +131,8 @@ function parseContext(value: unknown, where: string): number {
       const count = Number(digits);
       if (count > 0) {
         const unit = match?.[2]?.toLowerCase();
-        if (unit === "m") return count * 1_000_000;
-        if (unit === "k") return count * 1_000;
-        return count;
+        const scale = unit === "m" ? 1024 * 1024 : unit === "k" ? 1024 : 1;
+        return count * scale;
       }
     }
   }
@@ -170,10 +179,17 @@ function parseModels(value: unknown, where: string): ModelConfig[] {
       throw new ConfigError(`${at}: id is required`);
     }
     const id = requireString(entry.id, `${at}.id`);
+    if (id.includes("[")) {
+      throw new ConfigError(`${at}.id: write "${id}" without the bracket suffix, and set context instead`);
+    }
     if (seen.has(id)) {
       throw new ConfigError(`${at}.id: duplicate model id "${id}"`);
     }
     seen.add(id);
+
+    if (entry.fast !== undefined && typeof entry.fast !== "boolean") {
+      throw new ConfigError(`${at}.fast: expected true or false`);
+    }
 
     const model: ModelConfig = { id };
     const label = optionalString(entry.label, `${at}.label`);
@@ -182,6 +198,7 @@ function parseModels(value: unknown, where: string): ModelConfig[] {
     if (label !== undefined) model.label = label;
     if (behavesAs !== undefined) model.behavesAs = behavesAs;
     if (description !== undefined) model.description = description;
+    if (entry.fast === true) model.fast = true;
     if (entry.context !== undefined) model.context = parseContext(entry.context, `${at}.context`);
 
     return model;
@@ -219,13 +236,28 @@ function parseProvider(name: string, value: unknown): ProviderConfig {
     }
   }
 
+  const fast = models.filter((model) => model.fast === true);
+  if (fast.length > 1) {
+    throw new ConfigError(
+      `${where}: only one model may be marked fast, found ${fast.map((model) => model.id).join(", ")}`,
+    );
+  }
+
   const provider: ProviderConfig = {
     baseUrl: parseBaseUrl(value.base_url, where),
     models,
     defaultModel,
+    fastModel: fast[0]?.id ?? defaultModel,
   };
 
   if (value.key !== undefined) provider.key = parseKey(value.key, where);
+
+  if (value.settings !== undefined) {
+    if (!isTable(value.settings)) {
+      throw new ConfigError(`${where}.settings: expected a table`);
+    }
+    provider.settings = jsonCopy(value.settings);
+  }
 
   return provider;
 }

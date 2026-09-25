@@ -35,7 +35,7 @@ So the launcher is not a translation layer. It is three environment variables po
 
 **Unknown models inherit known capability defaults.** Claude Code carries a per-model profile: whether it can use adaptive thinking, what effort level to launch with, whether it supports a lean prompt. A model absent from its catalog gets no profile. `behavesAs` maps the provider's model onto the closest model Claude Code does know, borrowing that profile without touching the model ID sent on the wire. This matters more than it sounds: it is the difference between a model that thinks and one that answers instantly.
 
-**The context window is stated, not guessed.** Anything Claude Code does not recognise gets assumed at 200k. Providers with a larger window need it declared, both for the `[1m]` planning hint on the model ID and for `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, which is where compaction actually triggers.
+**The context window is stated, not guessed.** Anything Claude Code does not recognise gets assumed at 200k. Providers with a larger window need it declared, both for the `[1m]` planning hint on the model ID and for `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, which is where compaction actually triggers. The suffix is appended only once the declared context reaches a million tokens, and the compact window is set to three quarters of it, which is 786432 for a 1M model.
 
 **Subagents and background models are redirected too.** `ANTHROPIC_DEFAULT_OPUS_MODEL` and friends, plus `CLAUDE_CODE_SUBAGENT_MODEL`, otherwise send subagent traffic to model names your gateway has never heard of. The bash security check runs non-streaming and needs its own model, or it fails silently on a catalog default that does not exist.
 
@@ -52,16 +52,41 @@ base_url = "https://api.deepseek.com/anthropic"
 key = { command = "pass show deepseek/api-key" }
 
 [[deepseek.models]]
-id         = "deepseek-flash"
-label      = "DeepSeek V4.1 Flash"
-context    = "1m"
-behaves_as = "claude-opus-4-7"
+id          = "deepseek-flash"
+label       = "DeepSeek V4.1 Flash"
+context     = "1m"
+behaves_as  = "claude-opus-4-7"
 description = "1M context, native multimodal. Reasoning and main loop."
 ```
 
+A provider that serves a second, cheaper model for the lower tiers marks it `fast`:
+
+```toml
+[mimo]
+base_url      = "https://token-plan-cn.xiaomimimo.com/anthropic"
+key           = { command = "pass show mimo/api-key" }
+default_model = "mimo-v2.6-pro"
+settings      = { alwaysThinkingEnabled = false }
+
+[[mimo.models]]
+id         = "mimo-v2.6-pro"
+context    = "1m"
+behaves_as = "claude-opus-4-7"
+
+[[mimo.models]]
+id         = "mimo-v2.6-flash"
+context    = "1m"
+behaves_as = "claude-opus-4-7"
+fast       = true
+```
+
+The selected model drives the main loop, and the entry marked `fast` takes the lower tiers: the Haiku slot, subagents, and the background classifier. With no `fast` entry every tier follows the selection, which is what a single model provider wants.
+
+`settings` is copied into the `--settings` JSON verbatim. It is the escape hatch for a key this project does not model, and it is the one place a typo does not fail: a misspelled key there is silently ignored, because validating it would mean tracking a schema that belongs to Claude Code. Everything outside that table is checked.
+
 `behaves_as` is deliberately pinned to a specific known model rather than a tier, because the profiles differ. On a 1M model with no fast mode, no lean prompt and no refusal fallback, borrowing a profile that claims those features produces requests the gateway rejects.
 
-The file is read from `$XDG_CONFIG_HOME/claude-launcher/config.toml`, falling back to `~/.config/claude-launcher/config.toml`. `context` takes a token count or a shorthand, so `"1m"`, `"128k"` and `200000` all work. `default_model` names the entry `claude-launcher deepseek` picks; leave it out and the first model listed wins.
+The file is read from `$XDG_CONFIG_HOME/claude-launcher/config.toml`, falling back to `~/.config/claude-launcher/config.toml`. `context` takes a token count or a power of two shorthand, so `"1m"` is 1048576 tokens and `"128k"` is 131072. `default_model` names the entry `claude-launcher deepseek` picks; leave it out and the first model listed wins.
 
 A key the loader does not recognise is an error rather than a shrug, since a misspelled `base_url` would otherwise be a silently ignored setting:
 
@@ -91,9 +116,26 @@ Nothing assumes a password manager. `pass`, `op`, `security`, `gpg` and a file o
 claude-launcher add deepseek
 ```
 
+## Usage
+
+```sh
+claude-launcher deepseek
+claude-launcher deepseek --model deepseek-flash
+claude-launcher mimo --safe
+claude-launcher deepseek -- -p "explain this repo"
+```
+
+`--model <id>` picks the model for the session and must be one the provider lists. Naming a model belonging to a different provider is an error here, rather than a request the gateway rejects with something less clear.
+
+`--safe` leaves out `--allow-dangerously-skip-permissions`, which is passed by default so that the bypass is available as an option in session. It does not enable the bypass by itself. Pass `--safe` when an unfamiliar model is about to touch a repo you care about.
+
+Anything else is forwarded to Claude Code, so `--resume`, `-p`, `--add-dir` and the rest behave as they normally do. A `--` sends every remaining argument through untouched, including anything that looks like a launcher option.
+
+The first positional names the provider, which is why `add`, `list`, `doctor` and `config` cannot be used as provider names.
+
 ## Install
 
-Not yet. The config loads and is validated, but nothing is wired to Claude Code, so there is nothing to install. To run what exists:
+Not yet on a registry. The launcher works, but you have to write `config.toml` by hand until `claude-launcher add` exists, so there is nothing to install yet. To run it:
 
 ```sh
 pnpm install
